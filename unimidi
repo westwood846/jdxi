@@ -1,0 +1,10 @@
+#!/usr/bin/jruby
+
+require "unimidi"
+
+output = UniMIDI::Output.find_by_name("UR22 [hw:1,0,0]").open
+
+output.puts(0xC1, 0x49)
+# output.puts(0x91, 0x3E, 0x5F)
+# sleep(0.5)
+# output.puts(0x81, 0x3E, 0x5F)

@@ -1,0 +1,66 @@
+#!/usr/bin/jruby
+
+
+require 'unimidi'
+
+module MIDI
+  CLOCK = 0xF8
+  SENSE = 0xFE
+  SYSEX = 0xF0
+  NOTEOFF = 0x80
+  NOTEON = 0x90
+  CH1 = 0x00
+  CH2 = 0x01
+  CH3 = 0x02
+  CH4 = 0x03
+  CH5 = 0x04
+  CH6 = 0x05
+  CH7 = 0x06
+  CH8 = 0x07
+  CH9 = 0x08
+  CH10 = 0x09
+  CH11 = 0x0A
+  CH12 = 0x0B
+  CH13 = 0x0C
+  CH14 = 0x0D
+  CH15 = 0x0E
+  CH16 = 0x0F
+end
+
+def data_array_to_s(data)
+  data.map{|x| x.to_s(16)}.map(&:upcase).map{|x| "0x#{x}"}.join(' ')
+end
+
+input = UniMIDI::Input.find_by_name('UR22 [hw:1,0,0]')
+
+exit_requested = false
+Kernel.trap('INT') { exit }
+
+blacklist = [MIDI::CLOCK, MIDI::SENSE]
+
+Thread.new do
+  input.open do |input|
+    loop do
+      packages = input.gets
+      packages.each do |package|
+        timestamp = package[:timestamp]
+        data = package[:data]
+        status = data[0]
+        next if blacklist.include?(status)
+        # print("#{timestamp}: ")
+        puts(data_array_to_s data)
+      end
+    end
+  end
+end
+
+output = UniMIDI::Output.find_by_name("UR22 [hw:1,0,0]").open
+
+loop do
+  output.puts(0x91, 0x3E, 0x5F)
+  sleep(0.5)
+  output.puts(0x81, 0x3E, 0x5F)
+end
+
+puts 'finished'
+# exit

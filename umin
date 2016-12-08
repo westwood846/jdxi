@@ -2,33 +2,16 @@
 
 
 require 'unimidi'
+require_relative 'midi'
 
-module MIDI
-  CLOCK = 0xF8
-  SENSE = 0xFE
-  SYSEX = 0xF0
-  NOTEOFF = 0x80
-  NOTEON = 0x90
-  CH1 = 0x00
-  CH2 = 0x01
-  CH3 = 0x02
-  CH4 = 0x03
-  CH5 = 0x04
-  CH6 = 0x05
-  CH7 = 0x06
-  CH8 = 0x07
-  CH9 = 0x08
-  CH10 = 0x09
-  CH11 = 0x0A
-  CH12 = 0x0B
-  CH13 = 0x0C
-  CH14 = 0x0D
-  CH15 = 0x0E
-  CH16 = 0x0F
-end
-
-def data_array_to_s(data)
-  data.map{|x| x.to_s(16)}.map(&:upcase).map{|x| "0x#{x}"}.join(' ')
+module JDXI
+  extend MIDI
+  ID = [0x41] # Roland
+  MODEL_ID = [0x00, 0x00, 0x00, 0x0E] # JD-XI
+  BROADCAST = [0x7F]
+  DEVICE_ID = [0x10]
+  DATA_REQUEST = [0x11]
+  DATA_SET = [0x12]
 end
 
 input = UniMIDI::Input.find_by_name('UR22 [hw:1,0,0]')
@@ -36,7 +19,7 @@ input = UniMIDI::Input.find_by_name('UR22 [hw:1,0,0]')
 exit_requested = false
 Kernel.trap('INT') { exit }
 
-blacklist = [MIDI::CLOCK, MIDI::SENSE]
+blacklist = MIDI::CLOCK + MIDI::SENSE
 
 Thread.new do
   input.open do |input|
@@ -48,7 +31,7 @@ Thread.new do
         status = data[0]
         next if blacklist.include?(status)
         # print("#{timestamp}: ")
-        puts(data_array_to_s data)
+        puts("< #{MIDI.b10_array_to_hex_array_s(data)}")
       end
     end
   end
@@ -57,9 +40,43 @@ end
 output = UniMIDI::Output.find_by_name("UR22 [hw:1,0,0]").open
 
 loop do
-  output.puts(0x91, 0x3E, 0x5F)
-  sleep(0.5)
-  output.puts(0x81, 0x3E, 0x5F)
+  # Note On
+  # output.puts(0x91, 0x3E, 0x5F)
+
+  # Identification Request
+  # output.puts([0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7])
+
+  # Set Parameter
+  effect_offset = 0x0003
+  data = 0x22 # 100
+  # Effect 1 Reverb Send Level of Temporary (current) Program
+  address = MIDI.address(0x18000000, 0x0200, effect_offset)
+  message =
+      MIDI::SYSEX +
+      JDXI::ID +
+      JDXI::DEVICE_ID +
+      JDXI::MODEL_ID +
+      JDXI::DATA_SET +
+      MIDI.int_to_byte_array_4(address) +
+      [data] +
+      MIDI.checksum(address, data) +
+      MIDI::SYSEX_END
+  # size = 0x0000DDDD
+  # address = MIDI.address(0x02000000, 0x0000, 0x0)
+  # message =
+  #     MIDI::SYSEX +
+  #     JDXI::ID +
+  #     JDXI::BROADCAST +
+  #     JDXI::MODEL_ID +
+  #     JDXI::DATA_SET +
+  #     MIDI.int_to_byte_array_4(address) +
+  #     MIDI.int_to_byte_array_4(size) +
+  #     MIDI.checksum(address, size) +
+  #     MIDI::SYSEX_END
+  puts "> #{MIDI.b10_array_to_hex_array_s(message)}"
+  output.puts(message)
+  sleep(5)
+  # output.puts(0x81, 0x3E, 0x5F) # Note Off
 end
 
 puts 'finished'
